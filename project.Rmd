@@ -1,0 +1,140 @@
+---
+title: "Practical Machine Learning Project"
+author: "Basudha Misra"
+date: "September 12, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+A group of enthusiasts who take measurements to quantify how much of a particular activity they do using devices such as Jawbone Up, Nike FuelBand, and Fitbit about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. But  they rarely quantify how well they do it. In this project, our goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Data Installation
+
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+
+```{r dataload}
+# locally data installing
+training <- read.csv("pml-training.csv", na.strings = c("NA", ""))
+testing <- read.csv("pml-testing.csv", na.strings = c("NA", ""))
+dim(training)
+dim(testing)
+```
+
+Here our aim is to predict the $classe$ variable from the training data.
+ 
+## Data Cleaning
+
+There are 100 variables in training data, each of which has 19216 missing values. On top of that first seven columns(variables) have no relevance in predicting $classe$ variable. This is why we remove these 107 columns from training and testing data.  
+
+```{r dataclean}
+training <- training[, colSums(is.na(training)) == 0]
+testing <- testing[, colSums(is.na(testing)) == 0]
+training <- training[, -c(1:7)]
+testing <- testing[, -c(1:7)]
+
+```
+
+## Data Splitting
+
+First we install all the packages required for this project.
+
+
+```{r requiredlibraries}
+
+library(caret); library(rattle); library(rpart); library(rpart.plot)
+library(randomForest); library(repmis)
+
+```
+
+We divide our training data into training and validation purpose using a 60:40 ratio to compute the out of sample errors.
+
+```{r datasplit}
+
+set.seed(1234) 
+inTrain <- createDataPartition(training$classe, p = 0.6, list = FALSE)
+train_p <- training[inTrain, ]
+valid_p<- training[-inTrain, ]
+
+```
+
+## Prediction Models
+
+We use two different type of models: Classification Tree and Random Forests to predict the outcome. 
+
+### Classification Tree
+
+Here we consider 5-fold cross validation which is a pretty standard process to save computation time without affecting the prediction precision much.
+
+
+```{r classtree}
+set.seed(1234)
+cv_control <- trainControl(method = "cv", number = 5)
+set.seed(1234)
+rpart_fit <- train(classe ~ ., data = train_p, method = "rpart", 
+                   trControl = cv_control)
+print(rpart_fit, digits = 4)
+
+fancyRpartPlot(rpart_fit$finalModel)
+
+# predicting outcomes using validation set
+rpart_predict <- predict(rpart_fit, valid_p)
+
+# Showing prediction result
+rpart_confusion <- confusionMatrix(valid_p$classe, rpart_predict)
+rpart_confusion
+rpart_accuracy <- rpart_confusion$overall[1]
+rpart_accuracy
+
+```
+
+
+We can see that the accuracy rate of Classification Tree model is only 49%, i.e. out of sample error is 51% which is not reliable. We need to explore other possibilities like Random Forests.
+
+### Random Forests
+
+We check whether Random Forests improve the accuracy or not.
+
+```{r randomforests}
+
+set.seed(1234)
+rf_fit <- train(classe ~ ., data = train_p, method = "rf", 
+                   trControl = cv_control)
+print(rf_fit, digits = 4)
+
+# predicting outcomes using validation set
+rf_predict <- predict(rf_fit, valid_p)
+
+# Showing prediction result
+rf_confusion <- confusionMatrix(valid_p$classe, rf_predict)
+rf_confusion
+rf_accuracy <- rf_confusion$overall[1]
+rf_accuracy
+
+```
+
+The accuracy rate has sufficiently improved for Random Forests to 99.1% compared to only 49% from Classification tree. This means for Random Forests we have only 0.9% out of sample error which is reasonably acceptable.
+
+## Testing set Prediction
+
+Out of Classification tree and Random Forests we will use Random Forests to predict the testing set outcome variable $classe$ due to it's much higher accuracy rate.
+
+
+```{r prediction}
+
+prediction <- predict(rf_fit, testing)
+prediction
+
+```
+
+
